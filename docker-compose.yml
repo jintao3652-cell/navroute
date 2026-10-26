@@ -1,0 +1,46 @@
+services:
+  navroute:
+    build: .
+    image: navroute:1.0.0
+    container_name: navroute
+    restart: unless-stopped
+    ports:
+      - "8110:8110"
+    volumes:
+      - ./data:/data
+    environment:
+      # 容器以 root 启动，入口脚本先把 /data 修正为下面这个 uid:gid，再降权运行 uvicorn。
+      # 宿主机目录属于别人时（如 1001:1001），把这两个值改成宿主机对应用户即可。
+      NRS_UID: "1000"
+      NRS_GID: "1000"
+      # how many cycles stay fully indexed in RAM (LRU)
+      NRS_MAX_LOADED_CYCLES: "3"
+      # force a default cycle; leave empty to auto-pick the one valid today
+      NRS_DEFAULT_CYCLE: ""
+      # warm the default cycle during start-up
+      NRS_PRELOAD: "1"
+      # 预热时同时构建航路图（首个 /api/efb/route 免等待）
+      NRS_PRELOAD_GRAPH: "1"
+      # 上传成功后自动重构建：重读 index.pkl + 重建航路图，新周期立即可用
+      NRS_REBUILD_ON_UPLOAD: "1"
+      NRS_REBUILD_GRAPH_ON_UPLOAD: "1"
+      # 写接口（POST/DELETE）令牌，留空则关闭校验
+      NRS_TOKEN: "admin123456"
+      # Web 控制台登录（HTML 页面），纯 Python 会话，无需 PHP
+      NRS_ADMIN_USER: "admin"
+      NRS_ADMIN_PASS: "admin123456"
+      NRS_SESSION_TTL: "43200"
+      # /api/efb/route: airport <-> enroute fix connection radius (NM)
+      NRS_CONNECT_RADIUS_NM: "250"
+      NRS_LOG_LEVEL: "INFO"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8110/api/efb/health',timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # uploading a 200 MB package needs a little headroom
+    deploy:
+      resources:
+        limits:
+          memory: 1g

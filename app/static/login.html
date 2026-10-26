@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · 航路解析服务</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --line: #e5e7eb;
+    --text: #111827;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-weak: #eff6ff;
+    --danger: #dc2626;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: grid; place-items: center; padding: 24px;
+    background-image: radial-gradient(1200px 500px at 50% -10%, #e8efff 0%, rgba(245,246,248,0) 70%);
+  }
+  .card {
+    width: 100%; max-width: 380px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04);
+    padding: 26px 26px 22px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: .2px; }
+  .brand .dot {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700;
+  }
+  .brand small { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 12px; }
+  h1 { margin: 18px 0 4px; font-size: 17px; font-weight: 600; }
+  p.hint { margin: 0 0 18px; color: var(--muted); font-size: 12.5px; }
+  label { display: block; font-size: 12.5px; color: #374151; margin: 0 0 6px; font-weight: 500; }
+  .field { margin-bottom: 14px; }
+  input[type=text], input[type=password] {
+    width: 100%; height: 38px; padding: 0 11px; border: 1px solid var(--line);
+    border-radius: 9px; background: #fff; outline: none; transition: .14s;
+    font: inherit;
+  }
+  input[type=text]:focus, input[type=password]:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak);
+  }
+  button {
+    width: 100%; height: 39px; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 13.5px;
+    transition: .14s;
+  }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #93b4f5; cursor: default; }
+  .msg {
+    display: none; margin: 0 0 14px; padding: 8px 10px; border-radius: 8px;
+    font-size: 12.5px; background: #fef2f2; color: var(--danger);
+    border: 1px solid #fecaca;
+  }
+  .msg.on { display: block; }
+  .foot {
+    margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 11.5px; display: flex; justify-content: space-between;
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+<form class="card" id="form" autocomplete="on">
+  <div class="brand"><span class="dot">N</span>航路解析服务<small>Navigraph DFD v2</small></div>
+  <h1>登录控制台</h1>
+  <p class="hint">请使用管理员账号登录后管理导航数据与航路解析。</p>
+
+  <div class="msg" id="msg"></div>
+
+  <div class="field">
+    <label for="name">用户名</label>
+    <input type="text" id="name" name="name" autocomplete="username" autofocus required>
+  </div>
+  <div class="field">
+    <label for="psw">密码</label>
+    <input type="password" id="psw" name="psw" autocomplete="current-password" required>
+  </div>
+
+  <button type="submit" id="btn">登 录</button>
+  <div class="foot"><span>session cookie</span><span id="who">—</span></div>
+</form>
+
+<script>
+const form = document.getElementById("form");
+const msg = document.getElementById("msg");
+const btn = document.getElementById("btn");
+const nextUrl = (() => {
+  const n = new URLSearchParams(location.search).get("next") || "/";
+  return (n.startsWith("/") && !n.startsWith("//")) ? n : "/";
+})();
+
+function show(text) {
+  msg.textContent = text;
+  msg.classList.add("on");
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  msg.classList.remove("on");
+  const name = document.getElementById("name").value.trim();
+  const psw = document.getElementById("psw").value;
+  if (!name || !psw) { show("请输入用户名和密码"); return; }
+
+  btn.disabled = true;
+  btn.textContent = "登录中…";
+  try {
+    const res = await fetch("/api/efb/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      credentials: "same-origin",
+      body: new URLSearchParams({ name, psw }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.code === 0) {
+      document.getElementById("who").textContent = data.data.user;
+      btn.textContent = "登录成功";
+      location.replace(nextUrl);
+      return;
+    }
+    show(data.message || ("登录失败（HTTP " + res.status + "）"));
+  } catch (err) {
+    show("网络错误：" + err.message);
+  }
+  btn.disabled = false;
+  btn.textContent = "登 录";
+});
+</script>
+</body>
+</html>

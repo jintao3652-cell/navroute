@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>航路解析服务 · Navigraph DFD</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --line: #e5e7eb;
+    --line-strong: #d1d5db;
+    --text: #111827;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-weak: #eff6ff;
+    --ok: #059669;
+    --warn: #b45309;
+    --warn-bg: #fffbeb;
+    --danger: #dc2626;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  header {
+    height: 58px; background: #fff; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 14px; padding: 0 20px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: .2px; }
+  .brand .dot {
+    width: 22px; height: 22px; border-radius: 7px;
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700;
+  }
+  .brand small { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 12px; }
+  .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .status i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
+    box-shadow: 0 0 0 3px rgba(5,150,105,.12);
+  }
+  .who { font-size: 12px; color: var(--muted); }
+  .who b { color: #374151; font-weight: 600; }
+  .ghost {
+    height: 30px; padding: 0 11px; border: 1px solid var(--line); background: #fff;
+    border-radius: 8px; color: #4b5563; cursor: pointer; font-size: 12.5px; transition: .14s;
+  }
+  .ghost:hover { border-color: var(--line-strong); color: var(--danger); background: #fef2f2; }
+
+  main {
+    display: grid; grid-template-columns: 330px minmax(0, 1fr);
+    gap: 16px; padding: 16px; align-items: start; max-width: 1500px; margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .panel h2 {
+    margin: 0; padding: 13px 16px; font-size: 13px; font-weight: 600;
+    border-bottom: 1px solid var(--line); color: #374151;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .tag {
+    font-size: 11px; font-weight: 500; color: var(--muted); background: #f3f4f6;
+    border-radius: 5px; padding: 1px 6px;
+  }
+  .body { padding: 14px 16px 16px; }
+
+  .drop {
+    border: 1.5px dashed var(--line-strong); border-radius: 10px; padding: 20px 14px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: .15s;
+    background: #fbfcfd;
+  }
+  .drop:hover, .drop.hot { border-color: var(--accent); background: var(--accent-weak); color: var(--accent); }
+  .drop b { display: block; color: var(--text); font-size: 13px; margin-bottom: 3px; }
+  .drop.hot b { color: var(--accent); }
+  .drop span { font-size: 12px; }
+  .bar { height: 4px; border-radius: 4px; background: #eef0f3; overflow: hidden; margin-top: 10px; display: none; }
+  .bar.on { display: block; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+  .cycles { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .cyc {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px;
+    border: 1px solid var(--line); cursor: pointer; transition: .12s; background: #fff;
+  }
+  .cyc:hover { border-color: var(--line-strong); background: #fafbfc; }
+  .cyc.on { border-color: var(--accent); background: var(--accent-weak); }
+  .cyc .id { font-family: var(--mono); font-weight: 600; font-size: 13px; }
+  .cyc .meta { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  .cyc .x, .cyc .rb {
+    border: 0; background: transparent; color: #c0c4cc; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 4px; border-radius: 5px;
+  }
+  .cyc .rb { margin-left: auto; }
+  .cyc .x:hover { color: var(--danger); background: #fef2f2; }
+  .cyc .rb:hover { color: var(--accent); background: var(--accent-weak); }
+  .pill {
+    font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #ecfdf5;
+    color: var(--ok); border: 1px solid #a7f3d0; margin-left: 4px;
+  }
+  .empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 10px 0; }
+
+  .tabs { display: flex; gap: 4px; padding: 10px 12px 0; }
+  .tab {
+    border: 0; background: transparent; padding: 8px 14px; border-radius: 8px 8px 0 0;
+    color: var(--muted); cursor: pointer; font-size: 13.5px; font-weight: 500;
+  }
+  .tab.on { color: var(--accent); background: var(--accent-weak); }
+  .pane { display: none; padding: 14px 16px 18px; }
+  .pane.on { display: block; }
+
+  label.f { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  textarea, input[type=text], select {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 9px;
+    padding: 10px 12px; background: #fff; outline: none; transition: .15s;
+  }
+  textarea { font-family: var(--mono); font-size: 13px; resize: vertical; min-height: 84px; }
+  textarea:focus, input[type=text]:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > div { flex: 1; min-width: 0; }
+  .btn {
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    padding: 10px 20px; border-radius: 9px; cursor: pointer; font-weight: 500;
+    white-space: nowrap; transition: .15s;
+  }
+  .btn:hover { background: #1d4ed8; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn.ghost { background: #fff; color: var(--accent); }
+  .btn.ghost:hover { background: var(--accent-weak); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    font-size: 11.5px; font-family: var(--mono); color: #4b5563; background: #f3f4f6;
+    border: 1px solid var(--line); border-radius: 20px; padding: 3px 10px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); }
+  .chip.on { border-color: var(--accent); background: var(--accent-weak); color: var(--accent); }
+  .chip.proc { display: inline-flex; align-items: center; gap: 6px; }
+  .chip.proc small { color: #9aa3ae; font-size: 10px; }
+  .group { margin-bottom: 14px; }
+  .group h4 {
+    margin: 0 0 8px; font-size: 11.5px; font-weight: 600; letter-spacing: .4px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px;
+    background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3;
+    border-radius: 7px; padding: 2px 8px; font-family: var(--mono);
+  }
+  .badge.star { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+  .badge.app { background: #fff7ed; border-color: #fed7aa; color: #b45309; }
+  .badge b { font-weight: 700; }
+  .rtag {
+    display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 5px;
+    font-size: 10px; line-height: 15px; font-family: inherit; font-weight: 600;
+  }
+  .rtag.trans { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .rtag.missed { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
+  .rtag.rwy { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+  .rtag.end { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  tr.missedleg td { background: #fdf8fb; }
+  tr.grouphdr td {
+    background: #fdf2f8; color: #9d174d; font-size: 11px; font-weight: 700;
+    letter-spacing: .3px; padding: 5px 10px;
+  }
+
+  .result { margin-top: 16px; display: none; }
+  .result.on { display: block; }
+  .rhead {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 12px; color: var(--muted); margin-bottom: 10px;
+  }
+  .rhead b { color: var(--text); font-family: var(--mono); }
+  .warnbox {
+    background: var(--warn-bg); border: 1px solid #fde68a; color: var(--warn);
+    border-radius: 9px; padding: 9px 12px; font-size: 12.5px; margin-bottom: 10px;
+  }
+  .warnbox div + div { margin-top: 4px; }
+  .errbox {
+    background: #fef2f2; border: 1px solid #fecaca; color: var(--danger);
+    border-radius: 9px; padding: 9px 12px; font-size: 12.5px;
+  }
+  .routein {
+    font-family: var(--mono); font-size: 12.5px; background: #f9fafb;
+    border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px;
+    word-break: break-all; line-height: 1.7; color: #1f2937;
+  }
+  .mapwrap { margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fcfdff; }
+  svg.map { display: block; width: 100%; height: auto; }
+  table.wpt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.wpt th {
+    text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+    padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff;
+  }
+  table.wpt td { padding: 5px 8px; border-bottom: 1px solid #f1f2f4; font-family: var(--mono); }
+  table.wpt tr:hover td { background: #fafbfc; }
+  table.wpt tr.openleg td { background: #fffbeb; }
+  /* leg table: one row explains how the leg is flown, not just where it ends */
+  table.seg { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 12px; }
+  table.seg th {
+    text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+    padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+    background: #fff; white-space: nowrap; z-index: 1;
+  }
+  table.seg td { padding: 6px 8px; border-bottom: 1px solid #f1f2f4; vertical-align: top; }
+  table.seg td.mono, table.seg .mono { font-family: var(--mono); }
+  table.seg tr:hover td { background: #fafbfc; }
+  table.seg tr.openleg td { background: #fffbeb; }
+  table.seg tr.missedleg td { background: #fdf8fb; }
+  table.seg .ins { color: #1f2937; line-height: 1.55; }
+  table.seg .dim { color: #9aa3ae; }
+  table.seg .sub { color: #8b95a1; font-size: 10.5px; line-height: 1.45; margin-top: 3px; }
+  table.seg .arc b { font-weight: 600; color: #3730a3; }
+  table.seg .legname { font-family: var(--mono); font-weight: 600; }
+  .tblhint { color: var(--muted); font-size: 11px; margin: 7px 2px 0; line-height: 1.7; }
+  .tblhint b { color: #475569; font-weight: 600; }
+  /* SID / STAR / 进近 航段表：与 API 返回的 segments 一一对应，默认折叠 */
+  details.segfold {
+    margin-top: 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: #fcfdff; overflow: hidden;
+  }
+  details.segfold > summary {
+    cursor: pointer; padding: 8px 12px; font-size: 12px; color: #334155;
+    background: #f8fafc; list-style: none;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  details.segfold > summary::-webkit-details-marker { display: none; }
+  details.segfold > summary::before {
+    content: "▸"; color: #94a3b8; font-size: 11px;
+  }
+  details.segfold[open] > summary::before { content: "▾"; }
+  details.segfold > summary:hover { background: #f1f5f9; }
+  details.segfold > summary b { color: var(--text); font-family: var(--mono); }
+  details.segfold > summary .dim { color: #9aa3ae; font-size: 11px; }
+  details.segfold > .tablewrap {
+    border: 0; border-top: 1px solid var(--line); border-radius: 0; max-height: 380px;
+  }
+  .ltag {
+    display: inline-block; min-width: 30px; text-align: center; padding: 1px 5px;
+    border-radius: 4px; background: #eef2ff; color: #4338ca; font-size: 11px;
+    font-weight: 600; letter-spacing: .02em;
+  }
+  tr.openleg .ltag { background: #fef3c7; color: #b45309; }
+  .tablewrap { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  /* 跑道 / ILS 表 */
+  table.rwy { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 12px; }
+  table.rwy th {
+    text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px;
+    padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+    background: #fff; white-space: nowrap; z-index: 1;
+  }
+  table.rwy td { padding: 6px 8px; border-bottom: 1px solid #f1f2f4; vertical-align: top; }
+  table.rwy td.mono { font-family: var(--mono); white-space: nowrap; }
+  table.rwy tr:hover td { background: #fafbfc; }
+  table.rwy .rwid { font-family: var(--mono); font-weight: 600; font-size: 13px; }
+  table.rwy .sub { color: #8b95a1; font-size: 10.5px; line-height: 1.45; margin-top: 2px; }
+  table.rwy .cat { display: inline-block; padding: 0 4px; border-radius: 4px; background: #eef2ff; color: #4338ca; font-size: 10.5px; }
+  table.rwy .cat.c3 { background: #fee2e2; color: #b91c1c; }
+  table.rwy .noils { color: #b0b8c1; }
+  table.rwy tr.isils td { background: #fcfdff; }
+  .foot { color: var(--muted); font-size: 11.5px; text-align: center; padding: 6px 0 22px; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot">N</span>航路解析服务
+    <small>Navigraph DFD v2 · 多周期预缓存</small></div>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+  <div class="status"><i id="dot"></i><span id="status">连接中…</span></div>
+  <button class="ghost" id="logout" title="退出登录">退出</button>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>导航数据周期 <span class="tag" id="cycCount">0</span></h2>
+    <div class="body">
+      <div class="drop" id="drop">
+        <b>上传导航数据压缩包</b>
+        <span>zip 内含 *.s3db / cycle.json / cycle_info.txt</span>
+        <div class="bar" id="bar"><i></i></div>
+      </div>
+      <input type="file" id="file" accept=".zip,.s3db,.db,.sqlite" hidden>
+      <div class="cycles" id="cycles"><div class="empty">加载中…</div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="tabs">
+      <button class="tab on" data-pane="parse">航路反向解析</button>
+      <button class="tab" data-pane="find">起降航路查询</button>
+      <button class="tab" data-pane="proc">SID / STAR 程序</button>
+      <button class="tab" data-pane="airport">机场 · 跑道 / ILS</button>
+    </div>
+
+    <div class="pane on" id="pane-parse">
+      <label class="f" for="route">航路字符串</label>
+      <textarea id="route" spellcheck="false" placeholder="ZBAA VYK G212 SGM"></textarea>
+      <div class="chips" id="samples"></div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label class="f" for="cycleSel">解析周期</label>
+          <select id="cycleSel"></select>
+        </div>
+        <button class="btn" id="parseBtn">解析</button>
+      </div>
+      <div class="result" id="parseResult"></div>
+    </div>
+
+    <div class="pane" id="pane-find">
+      <div class="row">
+        <div>
+          <label class="f" for="dep">起飞机场</label>
+          <input type="text" id="dep" placeholder="ZBAA" maxlength="4" spellcheck="false">
+        </div>
+        <div>
+          <label class="f" for="arr">到达机场</label>
+          <input type="text" id="arr" placeholder="ZGGG" maxlength="4" spellcheck="false">
+        </div>
+        <button class="btn" id="findBtn">查询</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label class="f" for="findSid">离场程序（可选）</label>
+          <input type="text" id="findSid" placeholder="自动选择" spellcheck="false">
+        </div>
+        <div>
+          <label class="f" for="findDepRwy">离场跑道</label>
+          <input type="text" id="findDepRwy" placeholder="自动" maxlength="4" spellcheck="false">
+        </div>
+        <div>
+          <label class="f" for="findStar">进场程序（可选）</label>
+          <input type="text" id="findStar" placeholder="自动选择" spellcheck="false">
+        </div>
+        <div>
+          <label class="f" for="findArrRwy">进场跑道</label>
+          <input type="text" id="findArrRwy" placeholder="自动" maxlength="4" spellcheck="false">
+        </div>
+        <div>
+          <label class="f" for="findIap">进近程序（可选）</label>
+          <input type="text" id="findIap" placeholder="如 I02LY，填了就接进近" spellcheck="false">
+        </div>
+      </div>
+      <div class="result" id="findResult"></div>
+    </div>
+
+    <div class="pane" id="pane-proc">
+      <div class="row">
+        <div>
+          <label class="f" for="procApt">机场 ICAO</label>
+          <input type="text" id="procApt" placeholder="ZBAA" maxlength="4" spellcheck="false">
+        </div>
+        <div style="flex:0 0 150px">
+          <label class="f" for="procType">类型</label>
+          <select id="procType">
+            <option value="all">SID + STAR + APPROACH</option>
+            <option value="sid">仅 SID</option>
+            <option value="star">仅 STAR</option>
+            <option value="iap">仅 APPROACH</option>
+            <option value="sid,star">SID + STAR</option>
+          </select>
+        </div>
+        <button class="btn" id="procBtn">列出程序</button>
+      </div>
+      <div class="result" id="procList"></div>
+      <div class="result" id="procDetail"></div>
+    </div>
+
+    <div class="pane" id="pane-airport">
+      <div class="row">
+        <div>
+          <label class="f" for="aptIcao">机场 ICAO</label>
+          <input type="text" id="aptIcao" placeholder="ZBAA" maxlength="4" spellcheck="false">
+        </div>
+        <button class="btn" id="aptBtn">查询跑道</button>
+      </div>
+      <div class="result" id="aptResult"></div>
+    </div>
+  </section>
+</main>
+<div class="foot">POST /api/efb/parseRoute · POST /api/efb/route · GET /api/efb/procedures · GET /api/efb/procedure · GET /api/efb/airport · GET /api/efb/runways · POST /api/efb/upload · 写接口需 token</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { cycle: "", cycles: [] };
+
+/* ------------------------------------------------------------------ token */
+const TOKEN_KEY = "nrs_token";
+let TOKEN = localStorage.getItem(TOKEN_KEY) || "admin123456";
+function askToken() {
+  const t = prompt("POST 接口需要 token，请输入：", TOKEN);
+  if (t === null) return false;
+  TOKEN = t.trim(); localStorage.setItem(TOKEN_KEY, TOKEN);
+  return true;
+}
+
+async function api(path, options) {
+  options = options || {};
+  const method = (options.method || "GET").toUpperCase();
+  const headers = Object.assign({}, options.headers || {});
+  if (method !== "GET") headers["x-token"] = TOKEN;
+  const res = await fetch(path, Object.assign({}, options, { headers }));
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = { code: -1, message: "响应解析失败" }; }
+  if (!res.ok && data && data.code === undefined) data.code = res.status;
+  if (data.code === 401 && askToken()) return api(path, options);
+  return data;
+}
+
+function fmt(v, n) { return Number(v).toFixed(n === undefined ? 5 : n); }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------------------------------------------------------------- cycles */
+async function loadCycles() {
+  const r = await api("/api/efb/cycles");
+  if (!r || r.code !== 0) { $("status").textContent = "服务不可用"; $("dot").style.background = "#dc2626"; return; }
+  state.cycles = r.data.cycles || [];
+  if (!state.cycle) state.cycle = r.data.default || (state.cycles[0] && state.cycles[0].cycle) || "";
+  $("cycCount").textContent = state.cycles.length;
+  $("status").textContent = state.cycles.length
+    ? `${state.cycles.length} 个周期 · 默认 ${r.data.default || "-"}`
+    : "尚无可用周期";
+  renderCycles();
+  renderSelect();
+}
+
+function renderCycles() {
+  const box = $("cycles");
+  if (!state.cycles.length) { box.innerHTML = '<div class="empty">还没有导航数据，请上传压缩包</div>'; return; }
+  box.innerHTML = state.cycles.map(c => {
+    const days = c.valid_from ? `${c.valid_from} → ${c.valid_to}` : "有效期未知";
+    return `<div class="cyc ${c.cycle === state.cycle ? "on" : ""}" data-c="${c.cycle}">
+      <div>
+        <div class="id">${esc(c.cycle)}${c.default ? '<span class="pill">默认</span>' : ""}${c.loaded ? '<span class="pill" style="background:#eef2ff;color:#4338ca;border-color:#c7d2fe">内存</span>' : ""}</div>
+        <div class="meta">${esc(days)}</div>
+        <div class="meta">${c.stats ? c.stats.routes + " 航路 · " + c.stats.airway_legs + " 航段" : ""}</div>
+      </div>
+      <button class="rb" data-rb="${esc(c.cycle)}" title="重构建索引">⟳</button>
+      <button class="x" data-del="${esc(c.cycle)}" title="删除">×</button>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".cyc").forEach(el => {
+    el.addEventListener("click", (e) => {
+      if (e.target.dataset.del) return;
+      state.cycle = el.dataset.c;
+      renderCycles(); renderSelect();
+    });
+  });
+  box.querySelectorAll("[data-rb]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const c = btn.dataset.rb;
+      btn.textContent = "…";
+      const r = await api("/api/efb/cycles/" + encodeURIComponent(c) + "/rebuild", { method: "POST" });
+      btn.textContent = "⟳";
+      if (r.code !== 0) { alert(r.message || "重构建失败"); return; }
+      $("status").textContent = `周期 ${c} 已重构建 · ${r.data.rebuild_ms} ms`;
+      loadCycles();
+    });
+  });
+  box.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const c = btn.dataset.del;
+      if (!confirm("确认删除周期 " + c + " ？")) return;
+      const r = await api("/api/efb/cycles/" + encodeURIComponent(c), { method: "DELETE" });
+      if (r.code !== 0) alert(r.message || "删除失败");
+      if (state.cycle === c) state.cycle = "";
+      loadCycles();
+    });
+  });
+}
+
+function renderSelect() {
+  $("cycleSel").innerHTML = state.cycles.map(c =>
+    `<option value="${esc(c.cycle)}" ${c.cycle === state.cycle ? "selected" : ""}>${esc(c.cycle)} · ${esc(c.valid_from || "?")}</option>`
+  ).join("") || '<option value="">无</option>';
+}
+
+/* ---------------------------------------------------------------- upload */
+const drop = $("drop"), fileInput = $("file"), bar = $("bar"), barInner = bar.querySelector("i");
+drop.addEventListener("click", () => fileInput.click());
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.add("hot");
+}));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
+  e.preventDefault(); drop.classList.remove("hot");
+}));
+drop.addEventListener("drop", e => { if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]); });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) upload(fileInput.files[0]); });
+
+function upload(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("overwrite", "true");
+  fd.append("token", TOKEN);
+  bar.classList.add("on"); barInner.style.width = "2%";
+  drop.querySelector("b").textContent = "正在上传 " + file.name + " …";
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/efb/upload");
+  xhr.setRequestHeader("x-token", TOKEN);
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) barInner.style.width = (e.loaded / e.total * 92 + 2).toFixed(1) + "%";
+  };
+  xhr.onload = async () => {
+    barInner.style.width = "100%";
+    let r = {};
+    try { r = JSON.parse(xhr.responseText); } catch (e) {}
+    if (r.code === 401) {
+      bar.classList.remove("on"); barInner.style.width = "0";
+      drop.querySelector("b").textContent = "上传导航数据压缩包";
+      if (askToken()) upload(file);
+      return;
+    }
+    drop.querySelector("b").textContent = "上传导航数据压缩包";
+    setTimeout(() => { bar.classList.remove("on"); barInner.style.width = "0"; }, 700);
+    if (r.code === 0) {
+      state.cycle = r.data.cycle;
+      await loadCycles();
+      const rb = r.data.rebuild || {};
+      const ingest = (r.data.ingest_ms / 1000).toFixed(1);
+      $("status").textContent = rb.loaded
+        ? `周期 ${r.data.cycle} 已重构建 · 索引 ${ingest}s + 载入 ${(rb.rebuild_ms / 1000).toFixed(1)}s`
+        : `周期 ${r.data.cycle} 已写入磁盘 · 索引 ${ingest}s（未载入内存）`;
+    } else {
+      alert(r.message || "上传失败");
+    }
+  };
+  xhr.onerror = () => { alert("上传失败：网络错误"); bar.classList.remove("on"); };
+  xhr.send(fd);
+}
+
+/* --------------------------------------------------------------- drawing */
+function drawMap(wps, opt) {
+  /* ``opt.track`` is the densified APPROACH polyline: it ends at the runway
+     threshold.  ``opt.missed`` is the go-around (G/A), drawn as its own dashed
+     line so a missed-approach fix can never be read as the end of the
+     procedure.  ``wps`` keeps the published fixes for dots/labels.
+     ``opt.arcs`` marks the centre / radius of every RF & AF leg. */
+  opt = opt || {};
+  const track = opt.track;
+  const missedTrack = opt.missed;
+  const endName = opt.end;
+  const missedName = opt.missedEnd;
+  const missedWps = opt.missedWps;
+  const arcs = opt.arcs || [];
+  const line = (track && track.length > 1)
+    ? track.map(p => ({ lat: p[0], lon: p[1] }))
+    : wps.slice();
+  const miss = (missedTrack || []).map(p => ({ lat: p[0], lon: p[1] }));
+  const all = wps.concat(line, miss);
+  if (!all.length) return "";
+  let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+  for (const w of all) {
+    minLat = Math.min(minLat, w.lat); maxLat = Math.max(maxLat, w.lat);
+    minLon = Math.min(minLon, w.lon); maxLon = Math.max(maxLon, w.lon);
+  }
+  const W = 860, H = 420, P = 44;
+  const meanLat = (minLat + maxLat) / 2;
+  const kx = Math.max(0.2, Math.cos(meanLat * Math.PI / 180));
+  let spanX = Math.max((maxLon - minLon) * kx, 1e-3);
+  let spanY = Math.max(maxLat - minLat, 1e-3);
+  if (spanX / spanY > (W - 2 * P) / (H - 2 * P)) spanY = spanX * (H - 2 * P) / (W - 2 * P);
+  else spanX = spanY * (W - 2 * P) / (H - 2 * P);
+  const cLat = (minLat + maxLat) / 2, cLon = (minLon + maxLon) / 2;
+  const x0 = cLon * kx - spanX / 2, y0 = cLat - spanY / 2;
+  const px = (lon) => P + (lon * kx - x0) / spanX * (W - 2 * P);
+  const py = (lat) => H - P - (lat - y0) / spanY * (H - 2 * P);
+
+  const toXY = (list) => list.map(w => [px(w.lon), py(w.lat)]);
+  const pts = toXY(wps);
+  const lpts = toXY(line);
+  const mpts = toXY(miss);
+  const dOf = (list) => list.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const path = dOf(lpts);
+  const mpath = dOf(mpts);
+  const grid = [];
+  const stepFor = (span) => [10, 5, 2, 1, .5, .25, .1].find(s => span / s <= 10) || 10;
+  for (let lon = Math.ceil(x0 / stepFor(spanX)) * stepFor(spanX); lon < x0 + spanX; lon += stepFor(spanX)) {
+    grid.push(`<line x1="${px(lon)}" y1="${P - 10}" x2="${px(lon)}" y2="${H - P + 10}" stroke="#eef1f5"/>`);
+    grid.push(`<text x="${px(lon) + 3}" y="${H - P + 22}" fill="#9aa3ae" font-size="10">${lon.toFixed(1)}°</text>`);
+  }
+  for (let lat = Math.ceil(y0 / stepFor(spanY)) * stepFor(spanY); lat < y0 + spanY; lat += stepFor(spanY)) {
+    grid.push(`<line x1="${P - 10}" y1="${py(lat)}" x2="${W - P + 10}" y2="${py(lat)}" stroke="#eef1f5"/>`);
+    grid.push(`<text x="${P - 38}" y="${py(lat) + 3}" fill="#9aa3ae" font-size="10">${lat.toFixed(1)}°</text>`);
+  }
+  const dots = pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="#fff" stroke="#2563eb" stroke-width="1.6"/>`).join("");
+  const mdots = (missedWps || []).map(w => `<circle cx="${px(w.lon).toFixed(1)}" cy="${py(w.lat).toFixed(1)}" r="2.2" fill="#fff" stroke="#db2777" stroke-width="1.3"/>`).join("");
+  const a = pts.length ? pts[0] : lpts[0];
+  const b = lpts.length ? lpts[lpts.length - 1] : pts[pts.length - 1];
+  const bName = endName || (wps.length ? wps[wps.length - 1].name : "");
+  const prev = lpts.length > 1 ? lpts[lpts.length - 2] : null;
+  /* the runway threshold is marked with a runway bar, not a generic dot */
+  let bar = "";
+  if (b && prev) {
+    const ang = Math.atan2(b[1] - prev[1], b[0] - prev[0]) * 180 / Math.PI;
+    bar = `<g transform="rotate(${ang.toFixed(1)} ${b[0].toFixed(1)} ${b[1].toFixed(1)})">
+      <rect x="${(b[0] - 3).toFixed(1)}" y="${(b[1] - 13).toFixed(1)}" width="6" height="26" rx="1.5" fill="#111827"/>
+      <line x1="${b[0].toFixed(1)}" y1="${(b[1] - 8).toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${(b[1] + 8).toFixed(1)}" stroke="#fff" stroke-width="1.2" stroke-dasharray="3 3"/>
+    </g>`;
+  }
+  let missedLabel = "";
+  if (mpts.length) {
+    const m = mpts[mpts.length - 1];
+    const nm = missedName || "复飞";
+    missedLabel = `<circle cx="${m[0].toFixed(1)}" cy="${m[1].toFixed(1)}" r="4.5" fill="#fff" stroke="#db2777" stroke-width="1.8"/>
+      <text x="${(m[0] + 8).toFixed(1)}" y="${(m[1] + 14).toFixed(1)}" font-size="11" font-weight="600" fill="#be185d">${esc(nm)} · 复飞</text>`;
+  }
+  /* RF / AF: show the circle actually flown + its centre, so "which point do I
+     turn around" is visible instead of hidden in the table */
+  const pxPerNm = (H - 2 * P) / spanY;
+  const arcMarks = arcs.map(seg => {
+    const a = seg.arc || seg;          /* accept a segment or a bare arc */
+    if (!a || a.center_lat == null) return "";
+    const cx = px(a.center_lon), cy = py(a.center_lat);
+    const endLat = seg.lat != null ? seg.lat : a.center_lat;
+    const endLon = seg.lon != null ? seg.lon : a.center_lon;
+    const ex = px(endLon), ey = py(endLat);
+    const r = Math.max(3, a.radius_nm * pxPerNm);
+    return `<g>
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="#c7d2fe" stroke-width="1" stroke-dasharray="2 4"/>
+      <line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="#a5b4fc" stroke-width="1" stroke-dasharray="3 3"/>
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3" fill="#fff" stroke="#4f46e5" stroke-width="1.4"/>
+      <path d="M ${(cx - 4).toFixed(1)} ${cy.toFixed(1)} h 8 M ${cx.toFixed(1)} ${(cy - 4).toFixed(1)} v 8" stroke="#4f46e5" stroke-width="1.1"/>
+      ${arcs.length <= 8 && a.center_name ? `<text x="${(cx + 7).toFixed(1)}" y="${(cy - 6).toFixed(1)}" font-size="10" font-weight="600" fill="#4338ca">${esc(a.center_name)}</text>` : ""}
+    </g>`;
+  }).join("");
+  const legend = `<g font-size="10.5" fill="#64748b">
+    <line x1="16" y1="20" x2="42" y2="20" stroke="#2563eb" stroke-width="2.4"/>
+    <text x="48" y="23.5">进近（终点为跑道）</text>
+    ${mpts.length ? `<line x1="176" y1="20" x2="202" y2="20" stroke="#db2777" stroke-width="1.8" stroke-dasharray="5 3"/>
+    <text x="208" y="23.5">复飞 G/A</text>` : ""}
+    ${arcMarks ? `<circle cx="286" cy="20" r="3" fill="#fff" stroke="#4f46e5" stroke-width="1.4"/>
+    <text x="296" y="23.5">圆弧圆心</text>` : ""}
+  </g>`;
+  return `<svg class="map" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${W}" height="${H}" fill="#fcfdff"/>
+    ${grid.join("")}
+    ${arcMarks}
+    ${mpath ? `<path d="${mpath}" fill="none" stroke="#f9a8d4" stroke-width="6" stroke-opacity=".35" stroke-linejoin="round" stroke-dasharray="7 5"/>` : ""}
+    ${mpath ? `<path d="${mpath}" fill="none" stroke="#db2777" stroke-width="1.7" stroke-dasharray="6 4"/>` : ""}
+    <path d="${path}" fill="none" stroke="#93b4f8" stroke-width="6" stroke-opacity=".35" stroke-linejoin="round"/>
+    <path d="${path}" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round"/>
+    ${dots}${mdots}
+    ${bar}
+    <circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="6" fill="#059669"/>
+    <text x="${(a[0] + 10).toFixed(1)}" y="${(a[1] - 8).toFixed(1)}" font-size="12" font-weight="600" fill="#047857">${esc(wps.length ? wps[0].name : "")}</text>
+    ${missedLabel}
+    <text x="${(b[0] + 10).toFixed(1)}" y="${(b[1] + 4).toFixed(1)}" font-size="12" font-weight="700" fill="#b91c1c">${esc(bName)} · 终点</text>
+    ${legend}
+  </svg>`;
+}
+
+function renderWarnings(list) {
+  if (!list || !list.length) return "";
+  return `<div class="warnbox">${list.map(w => `<div>· ${esc(w)}</div>`).join("")}</div>`;
+}
+
+function procBadges(d) {
+  const out = [];
+  if (d.sid) {
+    const rw = d.sid.runway ? ` · RW${esc(d.sid.runway)}` : "";
+    const tr = d.sid.transition ? ` · ${esc(d.sid.transition)}` : "";
+    out.push(`<span class="badge">SID <b>${esc(d.sid.name)}</b>${rw}${tr}</span>`);
+  }
+  if (d.star) {
+    const rw = d.star.runway ? ` · RW${esc(d.star.runway)}` : "";
+    const tr = d.star.transition ? ` · ${esc(d.star.transition)}` : "";
+    out.push(`<span class="badge star">STAR <b>${esc(d.star.name)}</b>${rw}${tr}</span>`);
+  }
+  if (d.iap) {
+    const rw = d.iap.runway ? ` · RW${esc(d.iap.runway)}` : "";
+    const ap = d.iap.approach ? ` · ${esc(d.iap.approach)}` : "";
+    out.push(`<span class="badge app">进近 <b>${esc(d.iap.name)}</b>${rw}${ap}</span>`);
+  }
+  return out.join("");
+}
+
+function renderWptTable(wps) {
+  return `<div class="tablewrap"><table class="wpt">
+    <thead><tr><th style="width:44px">#</th><th>航路点</th><th>纬度</th><th>经度</th></tr></thead>
+    <tbody>${wps.map((w, i) => `<tr><td>${i + 1}</td><td>${esc(w.name)}</td><td>${fmt(w.lat)}</td><td>${fmt(w.lon)}</td></tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+/* ARINC 424 leg table.  Every row answers: what is the terminator, which fix
+   does it end on, HOW is it flown (arc centre / radius / sweep for RF & AF),
+   and what altitude & speed constraints apply. */
+function renderSegTable(segs, endName, showHint) {
+  if (!segs || !segs.length) return "";
+  const rows = [];
+  let inMissed = false;
+
+  const arcCell = (s) => {
+    const a = s.arc;
+    if (!a) return '<span class="dim">—</span>';
+    const turn = a.turn === "L" ? "左转" : a.turn === "R" ? "右转" : "转向未编码";
+    const sweep = a.sweep_deg == null ? "" : ` ${Math.abs(Math.round(a.sweep_deg))}°`;
+    const title = `圆心 ${a.center_name || "未命名"}：${fmt(a.center_lat)} / ${fmt(a.center_lon)}`
+      + `　半径 ${a.radius_nm} NM　${turn}${sweep}`;
+    return `<div class="arc" title="${esc(title)}">
+      <b>${esc(a.center_name || "编码圆心")}</b>
+      <div class="sub mono">R ${a.radius_nm.toFixed(1)} NM · ${turn}${sweep}</div></div>`;
+  };
+
+  const altCell = (s) => {
+    const main = s.altitude ? `<span class="mono">${esc(s.altitude)}</span>`
+      : '<span class="dim">—</span>';
+    const sub = [];
+    if (s.altitude_code && "GHIJ".indexOf(s.altitude_code) >= 0) sub.push(`码 ${esc(s.altitude_code)}`);
+    if (s.vertical != null && Math.abs(s.vertical) > 0.001) {
+      sub.push(`下滑角 ${Math.abs(s.vertical).toFixed(1)}°`);
+    }
+    return main + (sub.length ? `<div class="sub">${sub.join(" · ")}</div>` : "");
+  };
+
+  const spdCell = (s) => {
+    const main = s.speed ? `<span class="mono">${esc(s.speed)}</span>` : '<span class="dim">—</span>';
+    return main;
+  };
+
+  segs.forEach((s, i) => {
+    if (s.role === "missed" && !inMissed) {
+      inMissed = true;
+      rows.push('<tr class="grouphdr"><td colspan="9">复飞程序 (G/A) · 不属于进近终点</td></tr>');
+    }
+    /* only an approach distinguishes its transition / missed-approach legs */
+    let tag = s.role === "transition" ? '<span class="rtag trans">过渡</span>'
+      : s.role === "missed" ? '<span class="rtag missed">复飞</span>'
+      : (s.role === "runway" || /^RW\d/i.test(s.name || "")) ? '<span class="rtag rwy">跑道</span>' : "";
+    if (endName && s.name === endName) tag += '<span class="rtag end">终点</span>';
+    const cls = [s.open ? "openleg" : "", s.role === "missed" ? "missedleg" : ""]
+      .filter(Boolean).join(" ");
+    const pos = s.open
+      ? '<span class="dim">— 无坐标<br>（终止于高度/距离）</span>'
+      : `<span class="mono">${fmt(s.lat)}<br>${fmt(s.lon)}</span>`;
+    const tip = [
+      `ARINC 424 ${s.path} — ${s.path_name || ""}`,
+      s.course_text ? `航向 ${s.course_text}` : "",
+      s.turn ? `转向 ${s.turn}` : "",
+      s.rho != null ? `DME ${s.rho}` : "",
+      s.theta != null ? `径向 ${s.theta}` : "",
+      s.altitude_code ? `高度码 ${s.altitude_code}` : "",
+      s.speed_code ? `速度码 ${s.speed_code}` : ""
+    ].filter(Boolean).join(" · ");
+    rows.push(`<tr${cls ? ` class="${cls}"` : ""} title="${esc(tip)}">
+      <td class="mono">${i + 1}</td>
+      <td><span class="ltag">${esc(s.path || "—")}</span>
+        <div class="sub">${esc(s.path_cn || s.path_name || "")}${s.rnp != null ? " · RNP " + s.rnp : ""}</div></td>
+      <td><span class="legname">${esc(s.name || "—")}</span>${tag}</td>
+      <td><div class="ins">${esc(s.instruction || s.path_name || "")}</div></td>
+      <td>${arcCell(s)}</td>
+      <td>${altCell(s)}</td>
+      <td>${spdCell(s)}</td>
+      <td class="mono">${s.length_nm != null ? s.length_nm.toFixed(1) + " NM" : "—"}</td>
+      <td>${pos}</td></tr>`);
+  });
+  return `<div class="tablewrap"><table class="seg">
+    <thead><tr>
+      <th style="width:34px">#</th>
+      <th style="width:80px">终止符</th>
+      <th style="width:118px">航路点</th>
+      <th>怎么飞（航段说明）</th>
+      <th style="width:164px">圆心 / 半径 / 转向</th>
+      <th style="width:110px">高度限制</th>
+      <th style="width:92px">速度限制</th>
+      <th style="width:72px">段长</th>
+      <th style="width:136px">位置</th>
+    </tr></thead>
+    <tbody>${rows.join("")}</tbody></table></div>
+    ${showHint === false ? "" : `<div class="tblhint">
+      高度/速度：<b>≥</b> 不低于、<b>≤</b> 不高于、<b>a – b</b> 为上下限；
+      <b>下滑角</b>为编码垂直角（-3.0° 即 3° 下降剖面），<b>RNP</b> 为所需导航性能。
+      圆弧腿（RF / AF）的「圆心」就是转弯中心：RF 为编码圆心点，AF 为 DME 台 + DME 距离作半径；
+      转向与弧度按数据里的 L/R 与圆心夹角计算，直飞腿该列为 —。
+    </div>`}`;
+}
+
+/* SID / STAR / 进近 的航段表：与 GET /api/efb/procedure 返回的 segments 同源同构，
+   parseRoute / route 现在也带上这些行，界面按程序分别折叠展示。 */
+function renderProcSegs(d) {
+  const block = (label, p, cls) => {
+    if (!p || !(p.segments || []).length) return "";
+    const rw = p.runway ? ` · RW${esc(p.runway)}` : "";
+    const tr = p.transition ? ` · ${esc(p.transition)}` : "";
+    const ap = p.approach ? ` · ${esc(p.approach)}${p.approach_name ? " " + esc(p.approach_name) : ""}` : "";
+    const end = (p.approach_end || {}).name
+      || (p.segments.filter(s => s.role !== "missed").pop() || {}).name || "";
+    return `<details class="segfold">
+      <summary><span class="badge ${cls}">${label}</span><b>${esc(p.name)}</b>${rw}${tr}${ap}
+        <span class="dim">航段 ${p.segments.length} 段 · 点开看怎么飞 / 圆弧圆心 / 高度速度限制</span>
+      </summary>
+      ${renderSegTable(p.segments, end, false)}
+    </details>`;
+  };
+  return [
+    block("SID", d.sid, ""),
+    block("STAR", d.star, "star"),
+    block("进近", d.iap, "app"),
+  ].filter(Boolean).join("");
+}
+
+/* ----------------------------------------------------------------- parse */
+async function doParse(routeText) {
+  const route = (routeText || $("route").value).trim();
+  if (!route) return;
+  $("route").value = route;
+  const box = $("parseResult");
+  box.classList.add("on");
+  box.innerHTML = '<div class="rhead">解析中…</div>';
+  $("parseBtn").disabled = true;
+  const q = new URLSearchParams({ route });
+  if (state.cycle) q.set("cycle", state.cycle);
+  const r = await api("/api/efb/parseRoute?" + q.toString(), { method: "POST" });
+  $("parseBtn").disabled = false;
+  if (r.code !== 0) { box.innerHTML = `<div class="errbox">${esc(r.message || "解析失败")}</div>`; return; }
+  const d = r.data;
+  if (!d.waypoints.length) {
+    box.innerHTML = `<div class="errbox">未解析出航路点</div>` + renderWarnings(d.warnings);
+    return;
+  }
+  box.innerHTML = `
+    <div class="rhead">
+      <span>周期 <b>${esc(d.cycle)}</b></span>
+      <span>航路点 <b>${d.waypoints.length}</b></span>
+      <span>耗时 <b>${d.took_ms} ms</b></span>
+      ${procBadges(d)}
+    </div>
+    ${renderWarnings(d.warnings)}
+    <div class="mapwrap">${drawMap(d.waypoints, {})}</div>
+    ${renderWptTable(d.waypoints)}
+    ${renderProcSegs(d)}`;
+}
+
+/* ------------------------------------------------------------------ find */
+async function doFind() {
+  const dep = $("dep").value.trim().toUpperCase();
+  const arr = $("arr").value.trim().toUpperCase();
+  const box = $("findResult");
+  box.classList.add("on");
+  if (!dep || !arr) { box.innerHTML = '<div class="errbox">请输入起降机场 ICAO</div>'; return; }
+  box.innerHTML = '<div class="rhead">查询中…</div>';
+  $("findBtn").disabled = true;
+  const q = new URLSearchParams({ dep, arr });
+  if (state.cycle) q.set("cycle", state.cycle);
+  const sid = $("findSid").value.trim().toUpperCase();
+  const star = $("findStar").value.trim().toUpperCase();
+  const depRwy = $("findDepRwy").value.trim().toUpperCase();
+  const arrRwy = $("findArrRwy").value.trim().toUpperCase();
+  const iap = $("findIap").value.trim().toUpperCase();
+  if (sid) q.set("sid", sid);
+  if (star) q.set("star", star);
+  if (depRwy) q.set("dep_runway", depRwy);
+  if (arrRwy) q.set("arr_runway", arrRwy);
+  if (iap) q.set("iap", iap);
+  const r = await api("/api/efb/route?" + q.toString(), { method: "POST" });
+  $("findBtn").disabled = false;
+  if (r.code !== 0) { box.innerHTML = `<div class="errbox">${esc(r.message || "查询失败")}</div>`; return; }
+  const d = r.data;
+  box.innerHTML = `
+    <div class="rhead">
+      <span>周期 <b>${esc(d.cycle)}</b></span>
+      <span>距离 <b>${d.distance_nm} NM</b></span>
+      <span>航路点 <b>${d.waypoints.length}</b></span>
+      <span>耗时 <b>${d.took_ms} ms</b></span>
+      ${procBadges(d)}
+    </div>
+    ${renderWarnings(d.warnings)}
+    <div class="routein">${esc(d.route)}</div>
+    <div class="mapwrap">${drawMap(d.waypoints, {})}</div>
+    ${renderWptTable(d.iap ? d.waypoints.slice(1) : d.waypoints.slice(1, -1))}
+    ${renderProcSegs(d)}`;
+}
+
+/* ------------------------------------------------------------ procedures */
+async function doProcedures() {
+  const apt = $("procApt").value.trim().toUpperCase();
+  const box = $("procList");
+  const detail = $("procDetail");
+  box.classList.add("on");
+  detail.classList.remove("on");
+  detail.innerHTML = "";
+  if (!apt) { box.innerHTML = '<div class="errbox">请输入机场 ICAO</div>'; return; }
+  box.innerHTML = '<div class="rhead">查询中…</div>';
+  $("procBtn").disabled = true;
+  const q = new URLSearchParams({ airport: apt, type: $("procType").value });
+  if (state.cycle) q.set("cycle", state.cycle);
+  const r = await api("/api/efb/procedures?" + q.toString(), { method: "GET" });
+  $("procBtn").disabled = false;
+  if (r.code !== 0) { box.innerHTML = `<div class="errbox">${esc(r.message || "查询失败")}</div>`; return; }
+  const d = r.data;
+  const rw = d.runways.map(x => x.designator).join(" / ") || "无跑道数据";
+  const group = (title, kind, list) => {
+    if (!list || !list.length) return "";
+    return `<div class="group"><h4>${title} · ${list.length}</h4>
+      <div class="chips">${list.map(p => `<span class="chip proc" data-kind="${kind}" data-name="${esc(p.name)}">
+        ${esc(p.name)}<small>${kind === "iap" && p.approach ? esc(p.approach) + " · " : ""}${p.waypoints}点${p.runways.length ? " · " + p.runways.join("/") : ""}</small>
+      </span>`).join("")}</div></div>`;
+  };
+  box.innerHTML = `
+    <div class="rhead">
+      <span>机场 <b>${esc(d.airport)}</b></span>
+      <span>跑道 <b>${esc(rw)}</b></span>
+      <span>周期 <b>${esc(d.cycle)}</b></span>
+      <span>耗时 <b>${d.took_ms} ms</b></span>
+    </div>
+    ${group("SID 离场程序", "sid", d.sid || [])}
+    ${group("STAR 进场程序", "star", d.star || [])}
+    ${group("APPROACH 进近程序", "iap", d.iap || [])}
+    ${(!(d.sid || []).length && !(d.star || []).length && !(d.iap || []).length) ? '<div class="empty">该机场没有 SID / STAR / APPROACH 数据</div>' : ""}`;
+  box.querySelectorAll(".chip.proc").forEach(el => {
+    el.addEventListener("click", () => {
+      box.querySelectorAll(".chip.proc").forEach(x => x.classList.toggle("on", x === el));
+      doProcedure(apt, el.dataset.kind, el.dataset.name);
+    });
+  });
+}
+
+async function doProcedure(apt, kind, name, runway, transition) {
+  const box = $("procDetail");
+  box.classList.add("on");
+  box.innerHTML = '<div class="rhead">展开中…</div>';
+  const q = new URLSearchParams({ airport: apt, type: kind, name });
+  if (state.cycle) q.set("cycle", state.cycle);
+  if (runway) q.set("runway", runway);
+  if (transition) q.set("transition", transition);
+  const r = await api("/api/efb/procedure?" + q.toString(), { method: "GET" });
+  if (r.code !== 0) { box.innerHTML = `<div class="errbox">${esc(r.message || "展开失败")}</div>`; return; }
+  const d = r.data;
+  const TYPE_LABEL = { sid: "SID", star: "STAR", iap: "APPROACH" };
+  const mw = d.missed_waypoints || [];
+  const mEnd = mw.length ? mw[mw.length - 1].name : "";
+  /* the procedure terminates on the runway (approach) / last fix (SID·STAR) —
+     never on a go-around point */
+  const endName = d.approach_end ? d.approach_end.name
+    : (d.waypoints.length ? d.waypoints[d.waypoints.length - 1].name : "");
+  const sel = (id, label, value, options) => `
+    <div style="flex:0 0 160px">
+      <label class="f" for="${id}">${label}</label>
+      <select id="${id}"><option value="">自动</option>
+        ${options.map(o => `<option value="${esc(o)}"${o === value ? " selected" : ""}>${esc(o)}</option>`).join("")}
+      </select>
+    </div>`;
+  box.innerHTML = `
+    <div class="rhead">
+      <span>${TYPE_LABEL[d.type] || "程序"} <b>${esc(d.name)}</b></span>
+      ${d.approach ? `<span>进近方式 <b>${esc(d.approach)}</b>${d.approach_name ? " " + esc(d.approach_name) : ""}</span>` : ""}
+      <span>机场 <b>${esc(d.airport)}</b></span>
+      <span>${d.type === "iap" ? "进近点" : "航路点"} <b>${d.waypoints.length}</b></span>
+      ${d.approach_end ? `<span>终点 <b>${esc(d.approach_end.name)}</b></span>` : ""}
+      ${(d.segments || []).length ? `<span>航段 <b>${d.segments.length}</b></span>` : ""}
+      ${d.missed ? `<span>复飞段 <b>${d.missed}</b></span>` : ""}
+      ${(d.leg_types || []).length ? `<span>终止符 <b>${esc(d.leg_types.join(" "))}</b></span>` : ""}
+      ${d.runway ? `<span>跑道 <b>${esc(d.runway)}</b></span>` : ""}
+      ${d.transition ? `<span>${d.type === "iap" ? "进近过渡" : "过渡"} <b>${esc(d.transition)}</b></span>` : ""}
+      <span>耗时 <b>${d.took_ms} ms</b></span>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      ${sel("procRwy", "跑道", d.runway, d.runways)}
+      ${sel("procTrans", d.type === "iap" ? "进近过渡 (IAF)" : "航路过渡", d.transition, d.transitions)}
+    </div>
+    ${renderWarnings(d.warnings)}
+    <div class="mapwrap">${drawMap(d.waypoints, {
+      track: d.track, missed: d.missed_track, end: endName,
+      missedEnd: mEnd, missedWps: mw,
+      arcs: (d.segments || []).filter(s => s.arc && s.role !== "missed")
+    })}</div>
+    ${renderSegTable(d.segments, endName)}
+    ${renderWptTable(d.waypoints)}`;
+  const again = () => doProcedure(apt, kind, name,
+    $("procRwy").value, $("procTrans").value);
+  $("procRwy").addEventListener("change", again);
+  $("procTrans").addEventListener("change", again);
+}
+
+/* ------------------------------------------------------- airport / runway */
+function rwyLen(r) {
+  if (r.length_ft == null) return "—";
+  const w = r.width_ft != null ? `<div class="sub">宽 ${r.width_ft} ft / ${r.width_m} m</div>` : "";
+  return `${r.length_ft} ft<div class="sub">${r.length_m} m</div>${w}`;
+}
+
+function renderRunways(d) {
+  const rows = (d.runways || []).map(r => {
+    const ils = r.ils || [];
+    const col = (vals, empty) => vals.length
+      ? vals.map(v => `<div>${v}</div>`).join("")
+      : `<span class="noils">${empty}</span>`;
+    const sub = [];
+    if (r.threshold_crossing_height_ft != null) sub.push(`TCH ${r.threshold_crossing_height_ft} ft`);
+    if (r.gradient_pct != null) sub.push(`坡度 ${r.gradient_pct}%`);
+    if (r.traffic_pattern_text) sub.push(r.traffic_pattern_text === "left" ? "左起落" : (r.traffic_pattern_text === "right" ? "右起落" : ""));
+    if (r.displaced_threshold_ft) sub.push(`内移 ${r.displaced_threshold_ft} ft`);
+    const cat = (c) => `<span class="${/III/.test(c || "") ? "cat c3" : "cat"}">${esc(c || "—")}</span>`;
+    return `<tr class="${ils.length ? "isils" : ""}">
+      <td><span class="rwid">${esc(r.designator || "—")}</span>
+        ${r.kind !== "runway" ? '<div class="sub">非标准跑道（直升坪 / 水上）</div>' : ""}
+        ${sub.filter(Boolean).length ? `<div class="sub">${esc(sub.filter(Boolean).join(" · "))}</div>` : ""}</td>
+      <td class="mono">${r.heading_mag != null ? Math.round(r.heading_mag) + "°" : "—"}
+        <div class="sub">真 ${r.heading_true != null ? Math.round(r.heading_true) + "°" : "—"}</div></td>
+      <td class="mono">${rwyLen(r)}</td>
+      <td class="mono">${esc(r.surface || "—")}${r.surface_text ? `<div class="sub">${esc(r.surface_text)}</div>` : ""}</td>
+      <td class="mono">${r.elevation_ft != null ? r.elevation_ft + " ft" : "—"}</td>
+      <td class="mono">${col(ils.map(i => esc(i.ident || "—")), "无")}</td>
+      <td class="mono">${col(ils.map(i => i.frequency_mhz != null ? Number(i.frequency_mhz).toFixed(2) : "—"), "无")}</td>
+      <td class="mono">${col(ils.map(i => i.course_mag != null ? Math.round(i.course_mag) + "°" : "—"), "无")}</td>
+      <td class="mono">${col(ils.map(i => i.glideslope && i.glideslope.angle_deg != null ? Number(i.glideslope.angle_deg).toFixed(1) + "°" : "—"), "无")}</td>
+      <td class="mono">${ils.length ? ils.map(i => `<div>${cat(i.category)}${i.dme ? ' <span class="sub">DME</span>' : ""}</div>`).join("") : '<span class="noils">无 ILS</span>'}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="tablewrap"><table class="rwy">
+    <thead><tr>
+      <th>跑道</th><th>磁 / 真航向</th><th>长 / 宽</th><th>道面</th><th>入口标高</th>
+      <th>ILS 识别</th><th>频率 MHz</th><th>航道（磁）</th><th>下滑角</th><th>类别</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tblhint">
+      <b>磁航向</b>是跑道入口方向（跑道号×10 即其近似值），<b>真航向</b>为去掉磁差后的真方位；
+      长度/宽度/标高/TCH（跑道入口高）均为源数据单位英尺。
+      <b>ILS 航道</b>为磁方位，与跑道磁航向一致；<b>下滑角</b>是编码的 GP 角度（3.0° 即标准 3° 剖面）；
+      <b>DME</b> 表示该 ILS 与测距台并置。没有 ILS 的跑道显示「无」。
+    </div>`;
+}
+
+async function doAirport() {
+  const apt = $("aptIcao").value.trim().toUpperCase();
+  const box = $("aptResult");
+  box.classList.add("on");
+  if (!apt) { box.innerHTML = '<div class="errbox">请输入机场 ICAO</div>'; return; }
+  box.innerHTML = '<div class="rhead">查询中…</div>';
+  $("aptBtn").disabled = true;
+  const q = new URLSearchParams({ airport: apt });
+  if (state.cycle) q.set("cycle", state.cycle);
+  const r = await api("/api/efb/airport?" + q.toString(), { method: "GET" });
+  $("aptBtn").disabled = false;
+  if (r.code !== 0) { box.innerHTML = `<div class="errbox">${esc(r.message || "查询失败")}</div>`; return; }
+  const d = r.data;
+  const c = d.procedure_counts || {};
+  const meta = [d.city, d.country].filter(Boolean).join(", ");
+  box.innerHTML = `
+    <div class="rhead">
+      <span><b>${esc(d.airport)}</b> ${esc(d.name || "")}${d.iata ? " · " + esc(d.iata) : ""}</span>
+      ${meta ? `<span>${esc(meta)}</span>` : ""}
+      <span>标高 <b>${d.elevation_ft != null ? d.elevation_ft + " ft" : "—"}</b></span>
+      <span>磁差 <b>${d.magnetic_variation != null ? d.magnetic_variation + "°" : "—"}</b></span>
+      <span>过渡高度 <b>${d.transition_altitude_ft != null ? d.transition_altitude_ft + " ft" : "—"}</b></span>
+      <span>跑道 <b>${d.counts.runways}</b> · ILS <b>${d.counts.ils}</b></span>
+      <span>SID <b>${c.sid || 0}</b> · STAR <b>${c.star || 0}</b> · APP <b>${c.iap || 0}</b></span>
+      <span>耗时 <b>${d.took_ms} ms</b></span>
+    </div>
+    ${renderRunways(d)}
+    ${(d.procedures && (d.procedures.sid || []).length) ? `<div class="tblhint">
+      SID：${esc((d.procedures.sid || []).join(" "))}<br>
+      STAR：${esc((d.procedures.star || []).join(" "))}<br>
+      APPROACH：${esc((d.procedures.iap || []).join(" "))}
+    </div>` : ""}`;
+}
+
+/* ------------------------------------------------------------------ init */
+const SAMPLES = [
+  "ZBAA VYK G212 SGM",
+  "ZBAA/18L DOTR2G DOTRA",
+  "ZHO GYA ENVIP1 ZGGG",
+  "ZBAA ZSPD R34L",
+  "ZBAA DCT VYK DCT SGM"
+];
+$("samples").innerHTML = SAMPLES.map(s => `<span class="chip">${esc(s)}</span>`).join("");
+$("samples").querySelectorAll(".chip").forEach(el => {
+  el.addEventListener("click", () => { $("route").value = el.textContent; doParse(el.textContent); });
+});
+
+function selectTab(name) {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.pane === name));
+  document.querySelectorAll(".pane").forEach(p => p.classList.toggle("on", p.id === "pane-" + name));
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => selectTab(t.dataset.pane)));
+$("parseBtn").addEventListener("click", () => doParse());
+$("findBtn").addEventListener("click", doFind);
+$("procBtn").addEventListener("click", doProcedures);
+$("aptBtn").addEventListener("click", doAirport);
+$("route").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) doParse();
+});
+["dep", "arr"].forEach(id => $(id).addEventListener("keydown", e => { if (e.key === "Enter") doFind(); }));
+$("procApt").addEventListener("keydown", e => { if (e.key === "Enter") doProcedures(); });
+$("aptIcao").addEventListener("keydown", e => { if (e.key === "Enter") doAirport(); });
+$("cycleSel").addEventListener("change", (e) => { state.cycle = e.target.value; renderCycles(); });
+
+/* --------------------------------------------------------------- session */
+async function loadSession() {
+  try {
+    const r = await fetch("/api/efb/session", { credentials: "same-origin" }).then(x => x.json());
+    if (r.code === 0 && r.data.authenticated) $("who").innerHTML = "<b>" + esc(r.data.user) + "</b>";
+  } catch (e) { /* the gate already redirected, nothing to do */ }
+}
+
+$("logout").addEventListener("click", async () => {
+  try { await fetch("/api/efb/logout", { method: "POST", credentials: "same-origin" }); } catch (e) {}
+  location.href = "/login";
+});
+
+loadSession();
+loadCycles();
+
+/* deep link: /?tab=proc&airport=ZBAA  or  /?tab=parse&route=ZBAA+VYK+G212+SGM */
+const params = new URLSearchParams(location.search);
+if (params.get("tab")) selectTab(params.get("tab"));
+if (params.get("airport")) {
+  $("procApt").value = params.get("airport").toUpperCase();
+  const t = (params.get("type") || "").toLowerCase();
+  const alias = { both: "all", all: "all", app: "iap", approach: "iap",
+                  sid: "sid", star: "star", iap: "iap" };
+  if (alias[t]) $("procType").value = alias[t];
+  else if (t === "sid,star") $("procType").value = "sid,star";
+  doProcedures();
+}
+const deepRoute = params.get("route");
+if (deepRoute) doParse(deepRoute);
+</script>
+</body>
+</html>

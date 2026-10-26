@@ -1,0 +1,3 @@
+AIRAC cycle    : 2610
+Version        : 3
+Valid (from/to): 01/OCT/2026 - 28/OCT/2026

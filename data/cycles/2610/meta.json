@@ -1,0 +1,28 @@
+{
+  "cycle": "2610",
+  "revision": "3",
+  "provider": "JEPPESEN",
+  "dataset": "Fenix",
+  "format": "dfdv2",
+  "valid_from": "2026-10-01",
+  "valid_to": "2026-10-28",
+  "created_on": "2026-09-28 11:30:36 UTC",
+  "meta_sources": [
+    "cycle.json",
+    "cycle_info.txt",
+    "tbl_hdr_header"
+  ],
+  "db_file": "ng_jeppesen_fwdfd_2610.s3db",
+  "db_size": 190644224,
+  "cache_size": 10089300,
+  "installed_at": "2026-10-25T17:43:46Z",
+  "stats": {
+    "routes": 10333,
+    "chains": 15776,
+    "airway_legs": 108468,
+    "fixes": 85584,
+    "fix_points": 138840,
+    "airports": 16029,
+    "build_ms": 1690
+  }
+}
